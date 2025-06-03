@@ -11,18 +11,20 @@ from xgboost import XGBClassifier
 from catboost import CatBoostClassifier
 from sklearn.metrics import accuracy_score, classification_report, f1_score
 import matplotlib
+
 matplotlib.use('Agg')  # Non-blocking backend for matplotlib
 import matplotlib.pyplot as plt
-
 
 # Set output directory for plots
 plot_dir = "/Users/louisimhof/Desktop/University/Year 3/Research Project /Data/Healthcare/Plots/bestmodels/fairness/resampled"
 os.makedirs(plot_dir, exist_ok=True)
 
 # Load dataset
-df = pd.read_csv('/Users/louisimhof/Desktop/University/Year 3/Research Project /Data/Healthcare/biased_leukemia_dataset.csv')
+df = pd.read_csv(
+    '/Users/louisimhof/Desktop/University/Year 3/Research Project /Data/Healthcare/biased_leukemia_dataset.csv')
 print(df.head())
 print(df.isnull().sum())
+
 
 # Outlier removal using IQR
 def remove_outliers(df, column):
@@ -32,6 +34,7 @@ def remove_outliers(df, column):
     lower = Q1 - 1.5 * IQR
     upper = Q3 + 1.5 * IQR
     return df[(df[column] >= lower) & (df[column] <= upper)]
+
 
 for col in df.select_dtypes(include=[np.number]).columns:
     df = remove_outliers(df, col)
@@ -49,9 +52,9 @@ for col in df.select_dtypes(include=["object"]).columns:
     encoders[col] = le
     print(f"Encoded column: {col} (classes: {le.classes_.tolist()})")
 
-
 # Duplicates check
 print(f"Number of duplicate rows: {df.duplicated().sum()}")
+
 
 # Feature Selection with Correlation Anaylsis
 def select_features(df, threshold=0.7):
@@ -103,20 +106,18 @@ X_train, X_test, y_train, y_test = train_test_split(X_res, y_res, test_size=0.2,
 # Scale the data using MinMaxScaler
 scaler = MinMaxScaler()
 X_train_s = scaler.fit_transform(X_train)
-X_test_s  = scaler.transform(X_test)
-
+X_test_s = scaler.transform(X_test)
 
 # Define hyperparameter grids
-grid_lr  = {'C': [0.01]}
+grid_lr = {'C': [0.01]}
 grid_xgb = {'n_estimators': [400], 'max_depth': [10], 'learning_rate': [0.1], 'subsample': [0.8]}
 grid_cat = {'iterations': [1000], 'learning_rate': [0.05], 'depth': [10]}
-
 
 # RFECV using XGBoost
 xgb_rf_est = XGBClassifier(random_state=42)
 rfecv = RFECV(estimator=xgb_rf_est, step=1, cv=5, min_features_to_select=10)
 X_train_r = rfecv.fit_transform(X_train_s, y_train)
-X_test_r  = rfecv.transform(X_test_s)
+X_test_r = rfecv.transform(X_test_s)
 feat_r = X_train.columns[rfecv.support_]
 
 # Logistic Regression + RFECV
@@ -129,7 +130,7 @@ print(classification_report(y_test, y_lr_r))
 
 # Plot feature importance for LR+RFECV
 try:
-    plt.figure(figsize=(10,6))
+    plt.figure(figsize=(10, 6))
     plt.barh(range(len(feat_r)), np.abs(best_lr_r.coef_[0]))
     plt.yticks(range(len(feat_r)), feat_r)
     plt.title("LR+RFECV Importance")
@@ -149,7 +150,7 @@ print(classification_report(y_test, y_xgb_r))
 
 # Plot feature importance for XGBoost+RFECV
 try:
-    plt.figure(figsize=(10,6))
+    plt.figure(figsize=(10, 6))
     plt.barh(range(len(feat_r)), best_xgb_r.feature_importances_)
     plt.yticks(range(len(feat_r)), feat_r)
     plt.title("XGB+RFECV Importance")
@@ -159,22 +160,18 @@ try:
 except Exception as e:
     print("Plot failed:", e)
 
-
 # Summary of model performance
 print("\nModel Summary:")
 
 print(f"LR+RFECV:   {accuracy_score(y_test, y_lr_r):.4f}")
 print(f"XGB+RFECV:  {accuracy_score(y_test, y_xgb_r):.4f}")
 
-
-
-# Fairness-Checks für mehrere Modelle und sensible Gruppen
+# Fairness Checks
 sensitive_cols = ["Gender", "Ethnicity", "Socioeconomic_Status", "Urban_Rural"]
 
-# Modelle mit ihren jeweiligen Test-Features
 models = {
-    "LR+KBest":   (best_lr_r, X_test_r),
-    "XGB+RFECV":  (best_xgb_r, X_test_r),
+    "LR+KBest": (best_lr_r, X_test_r),
+    "XGB+RFECV": (best_xgb_r, X_test_r),
 
 }
 
@@ -183,7 +180,6 @@ for col in sensitive_cols:
     for model_name, (model, X_feat) in models.items():
         print(f"\n-- {model_name} --")
         for grp in sorted(X_test[col].unique()):
-            # Maske auf den originalen Test-Daten
             mask = (X_test[col] == grp).values
             if mask.sum() == 0:
                 continue
@@ -203,13 +199,9 @@ from sklearn.metrics import confusion_matrix
 
 
 def calculate_equalized_odds(y_true, y_pred, sensitive_col, groups):
-    """
-    Berechnet die Equalized Odds für jede Gruppe: TPR, FPR, FNR.
-    """
     equalized_odds = {}
 
     for grp in groups:
-        # Maske für die jeweilige Gruppe
         mask = (X_test[sensitive_col] == grp).values
         if mask.sum() == 0:
             continue
@@ -217,10 +209,8 @@ def calculate_equalized_odds(y_true, y_pred, sensitive_col, groups):
         y_true_grp = y_true[mask]
         y_pred_grp = y_pred[mask]
 
-        # Berechnung der Confusion Matrix
         tn, fp, fn, tp = confusion_matrix(y_true_grp, y_pred_grp).ravel()
 
-        # Berechnung von TPR, FPR, FNR
         tpr = tp / (tp + fn)  # True Positive Rate
         fpr = fp / (fp + tn)  # False Positive Rate
         fnr = fn / (tp + fn)  # False Negative Rate
@@ -231,9 +221,6 @@ def calculate_equalized_odds(y_true, y_pred, sensitive_col, groups):
 
 
 def plot_disparity(equalized_odds, metric):
-    """
-    Visualisiert die Disparität eines bestimmten Metrics (TPR, FPR, FNR) zwischen den Gruppen.
-    """
     groups = sorted(equalized_odds.keys())
     metric_values = [equalized_odds[group][metric] for group in groups]
 
@@ -244,14 +231,13 @@ def plot_disparity(equalized_odds, metric):
     plt.title(f'{metric} Disparity Across Groups for {model_name} by {sensitive_cols}')
     plt.xticks(rotation=45)
 
-    # Speichern des Plots
     plot_filename = os.path.join(plot_dir, f"{model_name}_{sensitive_cols}_{metric}.png")
     plt.tight_layout()
     plt.savefig(plot_filename)
     plt.close()
 
 
-# Berechnung von Equalized Odds für jedes Modell und jede Gruppe
+# Equalized Odds for Sensitive Groups
 sensitive_cols = ["Gender", "Ethnicity", "Socioeconomic_Status", "Urban_Rural"]
 for col in sensitive_cols:
     print(f"\n=== Equalized Odds by {col} ===")
@@ -264,20 +250,16 @@ for col in sensitive_cols:
         for grp, odds in equalized_odds.items():
             print(f"Group {grp}: TPR={odds['TPR']:.3f}, FPR={odds['FPR']:.3f}, FNR={odds['FNR']:.3f}")
 
-        # Optional: Visualisierung der Ergebnisse (Disparität der Equalized Odds)
         plot_disparity(equalized_odds, 'TPR')
         plot_disparity(equalized_odds, 'FPR')
         plot_disparity(equalized_odds, 'FNR')
 
-
 from fairlearn.metrics import MetricFrame
 from sklearn.metrics import accuracy_score, classification_report, f1_score
 
-# Berechne die Vorhersagen für das Modell
 y_pred_lr = best_lr_r.predict(X_test_r)
 y_pred_xgb = best_xgb_r.predict(X_test_r)
 
-# Erstelle MetricFrames für beide Modelle mit mehreren sensitiven Merkmalen
 metrics_lr = MetricFrame(
     metrics={'accuracy': accuracy_score, 'f1_score': f1_score},
     y_true=y_test,
@@ -292,11 +274,11 @@ metrics_xgb = MetricFrame(
     sensitive_features=X_test[["Gender", "Ethnicity", "Socioeconomic_Status", "Urban_Rural"]]
 )
 
-# Visualisiere die Fairness-Metriken
+
 metrics_lr_by_sensitive = metrics_lr.by_group
 metrics_xgb_by_sensitive = metrics_xgb.by_group
 
-# Plot for Logistic Regression Model
+
 metrics_lr_by_sensitive[['accuracy', 'f1_score']].plot(kind='bar', figsize=(10, 6))
 plt.title('Fairness Metrics for Logistic Regression')
 plt.xlabel('Sensitive Groups')
@@ -304,11 +286,10 @@ plt.ylabel('Metrics')
 plt.xticks(rotation=45)
 plt.legend(title='Metric')
 plt.tight_layout()
-# Speichern des Plots
 plt.savefig(os.path.join(plot_dir, "fairness_lr.png"))
 plt.close()
 
-# Plot for XGBoost Model
+
 metrics_xgb_by_sensitive[['accuracy', 'f1_score']].plot(kind='bar', figsize=(10, 6))
 plt.title('Fairness Metrics for XGBoost')
 plt.xlabel('Sensitive Groups')
@@ -316,7 +297,6 @@ plt.ylabel('Metrics')
 plt.xticks(rotation=45)
 plt.legend(title='Metric')
 plt.tight_layout()
-# Speichern des Plots
 plt.savefig(os.path.join(plot_dir, "fairness_xgb.png"))
 plt.close()
 
@@ -337,10 +317,8 @@ def plot_disadvantaged(df_by_group, model_name, metric='f1_score'):
     plt.legend()
     plt.subplots_adjust(bottom=0.35)
 
-    # Give extra room at the bottom for long labels
     plt.subplots_adjust(bottom=0.3, top=0.9)
 
-    # Save with tight bounding box
     fname = os.path.join(plot_dir, f"{model_name}_{metric}_disadvantaged.png")
     plt.savefig(fname, bbox_inches='tight')
     plt.close()
@@ -361,13 +339,13 @@ def report_disadvantaged_groups(df_by_group, model_name, metric='f1_score'):
         print(f"  [{decoded_str}]: {val:.3f}")
     print()
 
+
 report_disadvantaged_groups(metrics_lr.by_group, "Logistic Regression (RFECV)", metric='f1_score')
-report_disadvantaged_groups(metrics_xgb.by_group, "XGBoost (RFECV)",        metric='f1_score')
+report_disadvantaged_groups(metrics_xgb.by_group, "XGBoost (RFECV)", metric='f1_score')
 report_disadvantaged_groups(metrics_lr.by_group, "Logistic Regression (RFECV)", metric='accuracy')
-report_disadvantaged_groups(metrics_xgb.by_group, "XGBoost (RFECV)",        metric='accuracy')
+report_disadvantaged_groups(metrics_xgb.by_group, "XGBoost (RFECV)", metric='accuracy')
 
 
-# Anteil jeder Gruppe in sensitiven Variablen anzeigen
 for col in sensitive_cols:
     print(f"\nDistribution in '{col}' (Testset):")
     value_counts = X_test[col].value_counts(normalize=True) * 100
@@ -378,12 +356,10 @@ from sklearn.utils import resample
 
 
 def resample_sensitive_groups(df, sensitive_cols, target_col):
-
     if df.empty:
         raise ValueError("Data is empty. Cannot resample.")
 
     result_df = pd.DataFrame()
-
 
     unique_combinations = df.groupby(sensitive_cols).size().reset_index().drop(0, axis=1)
     print(f"[Debug] Number of uniques combinations: {len(unique_combinations)}")
@@ -395,15 +371,12 @@ def resample_sensitive_groups(df, sensitive_cols, target_col):
 
         print(f"[Debug] Group {combination.to_dict()} has {len(group_data)} cases.")
 
-
         pos_examples = group_data[group_data[target_col] == 1]
         neg_examples = group_data[group_data[target_col] == 0]
-
 
         if pos_examples.empty or neg_examples.empty:
             print(f"[Warning] Group {combination.to_dict()} has no cases. Skip.")
             continue
-
 
         if len(pos_examples) < len(neg_examples):
             pos_resampled = resample(pos_examples, replace=True, n_samples=len(neg_examples), random_state=42)
@@ -411,7 +384,6 @@ def resample_sensitive_groups(df, sensitive_cols, target_col):
         else:
             neg_resampled = resample(neg_examples, replace=True, n_samples=len(pos_examples), random_state=42)
             group_resampled = pd.concat([pos_examples, neg_resampled])
-
 
         result_df = pd.concat([result_df, group_resampled])
 
@@ -423,14 +395,12 @@ for col in sensitive_cols:
     print(f"\nDistribution in '{col}' (Testset):")
     value_counts = X_test[col].value_counts(normalize=True) * 100
     for val, pct in value_counts.items():
-        print(f"  Gruppe {val}: {pct:.2f}%")
-
+        print(f"  Group {val}: {pct:.2f}%")
 
 sensitive_cols = ["Gender", "Ethnicity", "Socioeconomic_Status", "Urban_Rural"]
 target_col = "Leukemia_Status"
 df_resampled = resample_sensitive_groups(df, sensitive_cols, target_col)
 print(f"Data after sensitive group resampling: {df_resampled.shape} rows.")
-
 
 X_resampled = df_resampled.drop(columns=["Patient_ID", "Leukemia_Status"])
 y_resampled = df_resampled["Leukemia_Status"]
@@ -462,7 +432,7 @@ best_lr_res = gs_lr_res.best_estimator_
 y_lr_res = best_lr_res.predict(X_test_res_r)
 
 # Logistic Regression Ergebnis
-print("LR+RFECV (Nach Resampling):")
+print("LR+RFECV (After Resampling):")
 print(classification_report(y_test_res, y_lr_res))
 
 # Plot Feature Importance for Logistic Regression
@@ -484,7 +454,7 @@ best_xgb_res = gs_xgb_res.best_estimator_
 y_xgb_res = best_xgb_res.predict(X_test_res_r)
 
 # XGBoost Ergebnis
-print("XGB+RFECV (Nach Resampling):")
+print("XGB+RFECV (After Resampling):")
 print(classification_report(y_test_res, y_xgb_res))
 
 # Plot Feature Importance for XGBoost
@@ -499,7 +469,7 @@ try:
 except Exception as e:
     print("Plot failed:", e)
 
-# Fairness-Analyse der resampleten Daten
+
 models_resampled = {
     "LR+KBest (Resampled)": (best_lr_res, X_test_res_r),
     "XGB+RFECV (Resampled)": (best_xgb_res, X_test_res_r)
@@ -510,7 +480,6 @@ for col in sensitive_cols:
     for model_name, (model, X_feat) in models_resampled.items():
         print(f"\n-- {model_name} --")
         for grp in sorted(X_test_res[col].unique()):
-            # Maske auf den resampleten Test-Daten
             mask = (X_test_res[col] == grp).values
             if mask.sum() == 0:
                 continue
@@ -526,27 +495,25 @@ for col in sensitive_cols:
                   f"F1(1)={report['1']['f1-score']:.3f}")
 
 
-# Vorhersagen
 y_train_pred = best_xgb_res.predict(X_train_res_r)
 y_test_pred = best_xgb_res.predict(X_test_res_r)
 
-# Performance train
+
 print("Train Data:")
 print(f"Accuracy: {accuracy_score(y_train_res, y_train_pred):.4f}")
 print(f"F1-Score: {f1_score(y_train_res, y_train_pred):.4f}")
 
-# Performance test
+
 print("\nTest Data:")
 print(f"Accuracy: {accuracy_score(y_test_res, y_test_pred):.4f}")
 print(f"F1-Score: {f1_score(y_test_res, y_test_pred):.4f}")
 
-# Verwende das beste Modell aus GridSearchCV
+
 best_xgb_res_lc = XGBClassifier(**gs_xgb_res.best_params_, random_state=4, eval_metric=["logloss", "auc", "error"])
 
-# Eval Set definieren
+
 eval_set = [(X_train_res_r, y_train_res), (X_test_res_r, y_test_res)]
 
-# Modell trainieren und speichern
 best_xgb_res_lc.fit(
     X_train_res_r,
     y_train_res,
@@ -554,7 +521,6 @@ best_xgb_res_lc.fit(
     verbose=0
 )
 
-# Learning Curve aufzeichnen
 results = best_xgb_res_lc.evals_result()
 plt.figure(figsize=(10, 6))
 
@@ -567,12 +533,10 @@ if "auc" in results['validation_0']:
     plt.plot(results['validation_0']['auc'], label='Train AUC', color='green')
     plt.plot(results['validation_1']['auc'], label='Test AUC', color='red')
 
-
 # Error Plot
 if "error" in results['validation_0']:
     plt.plot(results['validation_0']['error'], label='Train Error', color='cyan')
     plt.plot(results['validation_1']['error'], label='Test Error', color='magenta')
-
 
 plt.ylabel("Metric Value")
 plt.xlabel("Iterations")
@@ -589,11 +553,9 @@ from fairlearn.metrics import demographic_parity_difference, equalized_odds_diff
 from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_score
 
 
-# Funktion zur Berechnung von Equalized Odds und weiteren wichtigen Metriken
 def calculate_fairness_metrics(y_true, y_pred, sensitive_features, scenario):
-    print(f"=== Fairness Metriken [{scenario}] ===")
+    print(f"=== Fairness Metrics [{scenario}] ===")
 
-    # MetricFrame generieren
     metric_frame = MetricFrame(
         metrics={
             'Accuracy': accuracy_score,
@@ -606,11 +568,9 @@ def calculate_fairness_metrics(y_true, y_pred, sensitive_features, scenario):
         sensitive_features=sensitive_features
     )
 
-    # Ausgabe der Fairness Metriken (pro Gruppe)
-    print("\nFairness Metriken pro Gruppe:")
+    print("\nFairness Metrics per Group:")
     print(metric_frame.by_group)
 
-    # Equalized Odds Difference
     eod = equalized_odds_difference(
         y_true=y_true,
         y_pred=y_pred,
@@ -618,7 +578,6 @@ def calculate_fairness_metrics(y_true, y_pred, sensitive_features, scenario):
     )
     print(f"\nEqualized Odds Difference: {eod:.3f}")
 
-    # Demographic Parity Difference
     dpd = demographic_parity_difference(
         y_true=y_true,
         y_pred=y_pred,
@@ -627,7 +586,6 @@ def calculate_fairness_metrics(y_true, y_pred, sensitive_features, scenario):
     print(f"Demographic Parity Difference: {dpd:.3f}\n")
 
     return metric_frame
-
 
 
 print("Before Resampling:")
@@ -639,7 +597,6 @@ fairness_metrics_pre = calculate_fairness_metrics(
     scenario="Before Resampling"
 )
 
-
 print("After Resampling:")
 sensitive_features_post = X_test_res[["Gender", "Ethnicity", "Socioeconomic_Status", "Urban_Rural"]]
 fairness_metrics_post = calculate_fairness_metrics(
@@ -650,9 +607,7 @@ fairness_metrics_post = calculate_fairness_metrics(
 )
 
 
-
 def plot_fairness_comparison(metric_frame_pre, metric_frame_post, metric_name, save_path=None):
-
     groups = [
         ", ".join(f"{level}" for level in grp) for grp in metric_frame_pre.by_group.index
     ]
@@ -663,17 +618,15 @@ def plot_fairness_comparison(metric_frame_pre, metric_frame_post, metric_name, s
 
     plt.figure(figsize=(14, 7))
 
-
     plt.bar(x, values_pre, alpha=0.6, label=f"Before Resampling ({metric_name})", color='blue', width=0.4)
-
 
     plt.bar([pos + 0.4 for pos in x], values_post, alpha=0.6,
             label=f"After Resampling ({metric_name})", color='orange', width=0.4)
 
     plt.xticks([pos + 0.2 for pos in x], groups, rotation=90)
-    plt.xlabel("Gruppen")
+    plt.xlabel("Groups")
     plt.ylabel(metric_name)
-    plt.title(f"Fairness Comparisson ({metric_name}) for Groups")
+    plt.title(f"Fairness Comparison ({metric_name}) for Groups")
     plt.legend()
     plt.tight_layout()
 
