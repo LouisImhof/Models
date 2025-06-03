@@ -53,69 +53,41 @@ for col in df.select_dtypes(include=["object"]).columns:
 # Duplicates check
 print(f"Number of duplicate rows: {df.duplicated().sum()}")
 
+# Feature Selection with Correlation Anaylsis
+def select_features(df, threshold=0.7):
+    base_features = ["WBC_Count", "RBC_Count", "Platelet_Count",
+                     "Hemoglobin_Level", "Bone_Marrow_Blasts", "BMI"]
 
-# Feature Engineering
-# Ratio of hemoglobin level to white blood cell count
-df['Hemoglobin_WBC'] = df['Hemoglobin_Level'] / df['WBC_Count']
+    df['ImmuneScore'] = df['Chronic_Illness'] + df['Immune_Disorders']
+    df['RiskScore'] = (df['Smoking_Status'] + df['Alcohol_Consumption'] +
+                       df['Radiation_Exposure'] + df['Infection_History'] +
+                       df['Genetic_Mutation'] + df['Family_History'])
 
-# Ratio of platelet count to red blood cell count
-df['Platelet_RBC']   = df['Platelet_Count'] / df['RBC_Count']
+    df['log_WBC'] = np.log1p(df['WBC_Count'])
+    df['log_Blasts'] = np.log1p(df['Bone_Marrow_Blasts'])
 
-# Ratio of platelet count to hemoglobin level
-df['Platelet_Hb']    = df['Platelet_Count'] / df['Hemoglobin_Level']
+    df['Hemoglobin_WBC'] = df['Hemoglobin_Level'] / df['WBC_Count']
+    df['Platelet_RBC'] = df['Platelet_Count'] / df['RBC_Count']
 
-# Ratio of white blood cell count to platelet count
-df['WBC_Platelet']   = df['WBC_Count'] / df['Platelet_Count']
+    corr_matrix = df.corr().abs()
 
-# Ratio of red blood cell count to hemoglobin level
-df['RBC_Hb']         = df['RBC_Count'] / df['Hemoglobin_Level']
+    # remove correlated features
+    features_to_drop = []
+    for i in range(len(corr_matrix.columns)):
+        for j in range(i):
+            if corr_matrix.iloc[i, j] >= threshold:
+                colname = corr_matrix.columns[i]
+                if colname not in base_features and colname not in features_to_drop:
+                    features_to_drop.append(colname)
 
-# Natural logarithm of white blood cell count (to reduce skew)
-df['log_WBC'] = np.log1p(df['WBC_Count'])
+    df = df.drop(columns=features_to_drop)
 
-# Square root of platelet count (to reduce skew)
-df['sqrt_Platelet'] = np.sqrt(df['Platelet_Count'])
-
-# Sum of chronic illness and immune disorder indicators to represent overall immune compromise
-df['ImmuneScore']     = df['Chronic_Illness'] + df['Immune_Disorders']
-
-# Sum of binary risk factors (smoking, alcohol, radiation, infection, genetics, family history)
-df['RiskScore']       = (
-      df['Smoking_Status']
-    + df['Alcohol_Consumption']
-    + df['Radiation_Exposure']
-    + df['Infection_History']
-    + df['Genetic_Mutation']
-    + df['Family_History']
-)
-
-# Ratio of bone marrow blast percentage to white blood cell count
-df['Blast_WBC']       = df['Bone_Marrow_Blasts'] / df['WBC_Count']
-
-# Ratio of bone marrow blast percentage to red blood cell count
-df['Blast_RBC']       = df['Bone_Marrow_Blasts'] / df['RBC_Count']
-
-# Interaction of socioeconomic status and urban/rural indicator
-df['SES_Urban']       = df['Socioeconomic_Status'] * df['Urban_Rural']
-
-# Hemoglobin level normalized by body mass index
-df['Hb_per_BMI']      = df['Hemoglobin_Level'] / df['BMI']
-
-# Natural logarithm of bone marrow blast percentage
-df['log_Blasts']      = np.log1p(df['Bone_Marrow_Blasts'])
-
-# Square root of bone marrow blast percentage
-df['sqrt_Blasts']     = np.sqrt(df['Bone_Marrow_Blasts'])
-
-# Difference between individual WBC count and the country-specific mean WBC count
-df['Delta_WBC'] = df['WBC_Count'] - df.groupby('Country')['WBC_Count'].transform('mean')
-
-# Difference between individual hemoglobin level and the country-specific mean hemoglobin level
-df['Delta_Hb']  = df['Hemoglobin_Level'] - df.groupby('Country')['Hemoglobin_Level'].transform('mean')
+    print(f"Removed Features because of correlation {features_to_drop}")
+    return df
 
 
+df = select_features(df)
 
-# Anzeigen der ersten 5 Zeilen des DataFrames (nur als Beispiel)
 print(df.head())
 
 X = df.drop(columns=["Patient_ID", "Leukemia_Status"])
