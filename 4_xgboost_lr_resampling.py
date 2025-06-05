@@ -5,7 +5,7 @@ from lightgbm import early_stopping
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import LabelEncoder, MinMaxScaler
 from imblearn.over_sampling import SMOTE
-from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score
+from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score, learning_curve
 from sklearn.feature_selection import SelectKBest, chi2, RFECV
 from xgboost import XGBClassifier
 from catboost import CatBoostClassifier
@@ -641,3 +641,31 @@ plot_fairness_comparison(
     metric_name="Recall",
     save_path=os.path.join(plot_dir, "fairness_equalized_odds_comparison.png")
 )
+
+def plot_learning_curve(estimator, X, y, title, filename):
+    train_sizes, train_scores, test_scores = learning_curve(
+        estimator, X, y, cv=5, n_jobs=-1,
+        train_sizes=np.linspace(0.1, 1.0, 5),
+        scoring='accuracy'
+    )
+    train_scores_mean = np.mean(train_scores, axis=1)
+    test_scores_mean = np.mean(test_scores, axis=1)
+
+    plt.figure()
+    plt.plot(train_sizes, train_scores_mean, label="Training score", marker='o')
+    plt.plot(train_sizes, test_scores_mean, label="Cross-validation score", marker='x')
+    plt.title(title)
+    plt.xlabel("Training examples")
+    plt.ylabel("Score")
+    plt.legend(loc="best")
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(os.path.join(plot_dir, filename))
+    plt.close()
+
+
+plot_learning_curve(best_lr_res, X_train_res_r, y_train_res, "LR+RFECV Learning Curve Resampled", "lr_rfecv_lc_resampled.png")
+print("Learning Curve for LR+RFECV saved in:", os.path.join(plot_dir, "lr_rfecv_lc_resampled.png"))
+plot_learning_curve(best_xgb_res_lc, X_train_res_r, y_train_res, "XGB+RFECV Learning Curve Resampled", "xgb_rfecv_lc_resampled.png")
+print("Learning Curve for XGB+RFECV saved in:", os.path.join(plot_dir, "xgb_rfecv_lc_resampled.png"))
+
