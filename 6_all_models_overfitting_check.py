@@ -107,8 +107,8 @@ feat_k = k_best.get_feature_names_out(input_features=X_train.columns)
 
 # Define hyperparameter grids
 grid_lr  = {'C': [0.01]}
-grid_xgb = {'n_estimators': [400], 'max_depth': [10], 'learning_rate': [0.1], 'subsample': [0.8]}
-grid_cat = {'iterations': [1000], 'learning_rate': [0.05], 'depth': [10]}
+grid_xgb = {'n_estimators': [400], 'max_depth': [7], 'learning_rate': [0.1], 'subsample': [0.8]}
+grid_cat = {'iterations': [1000], 'learning_rate': [0.05], 'depth': [7]}
 
 # Logistic Regression + KBest
 gs_lr_k = GridSearchCV(LogisticRegression(max_iter=1000, random_state=42), grid_lr, cv=5, scoring='accuracy', n_jobs=-1)
