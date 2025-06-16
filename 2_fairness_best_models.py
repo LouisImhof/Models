@@ -103,8 +103,8 @@ X_test_s  = scaler.transform(X_test)
 
 # Define hyperparameter grids
 grid_lr  = {'C': [0.01]}
-grid_xgb = {'n_estimators': [400], 'max_depth': [10], 'learning_rate': [0.1], 'subsample': [0.8]}
-grid_cat = {'iterations': [1000], 'learning_rate': [0.05], 'depth': [10]}
+grid_xgb = {'n_estimators': [400], 'max_depth': [7], 'learning_rate': [0.1], 'subsample': [0.8]}
+grid_cat = {'iterations': [1000], 'learning_rate': [0.05], 'depth': [7]}
 
 
 # RFECV using XGBoost

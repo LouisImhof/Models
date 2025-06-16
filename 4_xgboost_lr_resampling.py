@@ -110,8 +110,8 @@ X_test_s = scaler.transform(X_test)
 
 # Define hyperparameter grids
 grid_lr = {'C': [0.01]}
-grid_xgb = {'n_estimators': [400], 'max_depth': [10], 'learning_rate': [0.1], 'subsample': [0.8]}
-grid_cat = {'iterations': [1000], 'learning_rate': [0.05], 'depth': [10]}
+grid_xgb = {'n_estimators': [400], 'max_depth': [7], 'learning_rate': [0.1], 'subsample': [0.8]}
+grid_cat = {'iterations': [1000], 'learning_rate': [0.05], 'depth': [7]}
 
 # RFECV using XGBoost
 xgb_rf_est = XGBClassifier(random_state=42)
@@ -669,3 +669,48 @@ print("Learning Curve for LR+RFECV saved in:", os.path.join(plot_dir, "lr_rfecv_
 plot_learning_curve(best_xgb_res_lc, X_train_res_r, y_train_res, "XGB+RFECV Learning Curve Resampled", "xgb_rfecv_lc_resampled.png")
 print("Learning Curve for XGB+RFECV saved in:", os.path.join(plot_dir, "xgb_rfecv_lc_resampled.png"))
 
+# Elbow analysis for XGBoost max_depth
+from sklearn.model_selection import GridSearchCV
+from xgboost import XGBClassifier
+
+# 1. Define candidate depths
+depths = [4, 5, 6, 7, 8, 9, 10]
+
+# 2. Parameter grid
+param_grid = {
+    'max_depth': depths,
+    'n_estimators': [400],
+    'learning_rate': [0.1],
+    'subsample': [0.8]
+}
+
+# 3. Grid search with train scores
+gs_elbow = GridSearchCV(
+    XGBClassifier(random_state=42),
+    param_grid,
+    cv=5,
+    scoring='accuracy',
+    return_train_score=True,
+    n_jobs=-1
+)
+gs_elbow.fit(X_train_r, y_train)  # or X_train_r, y_train for RFECV features
+
+# 4. Extract mean train and validation scores
+results = gs_elbow.cv_results_
+mean_train = results['mean_train_score']
+mean_val = results['mean_test_score']
+
+# 5. Plot the elbow curve
+import matplotlib.pyplot as plt
+
+plt.figure(figsize=(8, 5))
+plt.plot(depths, mean_train, marker='o', label='Train Accuracy')
+plt.plot(depths, mean_val, marker='s',  label='Validation Accuracy')
+plt.xlabel('Max Depth')
+plt.ylabel('Accuracy')
+plt.title('XGBoost: Train vs Validation Accuracy by max_depth')
+plt.legend()
+plt.grid(True)
+plt.tight_layout()
+plt.savefig(os.path.join(plot_dir, 'xgb_max_depth_elbow.png'))
+plt.close()
